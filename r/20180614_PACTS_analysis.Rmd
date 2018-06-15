@@ -1,0 +1,103 @@
+---
+title: "PACTS Study"
+
+subtitle: "Analysis of trial results"
+
+author: |
+  | Peter MacPherson
+  |
+  | Liverpool School of Tropical Medicine, Liverpool, UK
+  | Malawi-Liverpool-Wellcome Clinical Research Programme, Blantyre, Malawi
+  |
+
+date: | 
+  | `r format(Sys.time(), "%B %d, %Y")`
+  |
+  | Table of Contents:
+output: 
+  html_document:
+    theme: cosmo
+    highlight: espresso
+    toc: true
+---
+
+<br>
+
+## 1. Backgound
+
+
+<br>
+
+## 2. Set-up
+
+Load all required packages for analysis.
+
+```{r setup, echo=FALSE, include=FALSE, message=FALSE, comment=NA, warning=FALSE}
+library(tidyverse)    #for data manipulation
+library(pmthemes)     #for ggplot themes
+library(knitr)        #for tables
+library(here)         #for file nagivation
+library(arsenal)      #for tables of baseline characteristics
+
+```
+
+<br>
+
+## 3. Table 1: Baseline characteristics of participants and household members
+
+These data are taken from table `pacts03_indexbase`.
+
+```{r import}
+data("index_baseline", package="PACTSstudy")
+
+table1 <- tableby(group ~ sex + age + marital + educ + employ +
+                  hiv + art + tbtype + hh_size + hh_children +
+                  hh_u5 + head_age + head_sex + hh_prevtb +wealth_quintile,  
+                  data = index_baseline, test=FALSE, 
+                  numeric.stats=c("medianrange"), digits=1)
+
+kable(summary(table1))
+
+
+```
+
+<br>
+
+## 3. Table 2: Baseline characteristics of household contacts
+
+These data are taken from tables `pacts04A_hhTBscreen1` and `pacts04A_hhTBscreen2`.
+
+```{r}
+data("contacts_baseline", package="PACTSstudy")
+
+table2 <- tableby(group ~ p05age + contact_agegroup + contact_sex + 
+                  contact_educ,  
+                  data = contacts_baseline, test=FALSE, 
+                  numeric.stats=c("medianrange"), digits=1)
+
+kable(summary(table2))
+
+
+```
+
+
+<br>
+
+## X. Reproducibility
+
+This reproduction of the analysis was run by: 
+
+```{r sysinfo, echo=FALSE, message=FALSE, comment=NA, warning=FALSE}
+
+sysinfo <- Sys.info()
+
+sysinfo <- data.frame(keyName=names(sysinfo), value=sysinfo, row.names=NULL)
+
+sysinfo %>% kable()
+```
+
+Analysis was run at **`r Sys.time()`**, and using the following Session Info:
+
+```{r sessioninfo, echo=FALSE, results='markdown', message=FALSE, comment=NA, warning=FALSE}
+sessionInfo()
+```
