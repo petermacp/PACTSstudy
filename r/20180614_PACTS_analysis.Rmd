@@ -17,7 +17,6 @@ date: |
 output: 
   html_document:
     theme: cosmo
-    highlight: espresso
     toc: true
 ---
 
@@ -25,6 +24,7 @@ output:
 
 ## 1. Backgound
 
+Analysis of the PACTS Study trial data.
 
 <br>
 
@@ -32,12 +32,14 @@ output:
 
 Load all required packages for analysis.
 
-```{r setup, echo=FALSE, include=FALSE, message=FALSE, comment=NA, warning=FALSE}
+```{r setup, message=FALSE, comment=NA, warning=FALSE}
 library(tidyverse)    #for data manipulation
 library(pmthemes)     #for ggplot themes
 library(knitr)        #for tables
 library(here)         #for file nagivation
 library(arsenal)      #for tables of baseline characteristics
+library(rms)          #for regression modelling
+library(janitor)      #for tables
 
 ```
 
@@ -63,16 +65,16 @@ kable(summary(table1))
 
 <br>
 
-## 3. Table 2: Baseline characteristics of household contacts
+## 4. Table 2: Baseline characteristics of household contacts
 
 These data are taken from tables `pacts04A_hhTBscreen1` and `pacts04A_hhTBscreen2`.
 
 ```{r}
-data("contacts_baseline", package="PACTSstudy")
+data("contacts_threemonths", package="PACTSstudy")
 
-table2 <- tableby(group ~ p05age + contact_agegroup + contact_sex + 
-                  contact_educ,  
-                  data = contacts_baseline, test=FALSE, 
+table2 <- tableby(group ~ p05age + contact_agegroup + contact_sex +
+                  contact_educ,
+                  data = contacts_threemonths, test=FALSE,
                   numeric.stats=c("medianrange"), digits=1)
 
 kable(summary(table2))
@@ -80,10 +82,281 @@ kable(summary(table2))
 
 ```
 
+<br>
+
+## 5. Primary outcome 1: Proportion of household contacts diagnosed with TB
+
+i.e. with microbiologically confirmed TB, or taking TB treatment.
+
+First univariate model. Note that we adjust confidence intervals for household clustering by using the sandwich estimator.
+
+```{r}
+data("contacts_threemonths", package="PACTSstudy")
+
+contacts_threemonths %>%
+  tabyl(m3_tb_out, group) %>%
+  adorn_totals("row") %>%
+  adorn_percentages("col") %>%
+  adorn_pct_formatting() %>%
+  adorn_ns() %>%
+  kable()
+
+set.seed(42)
+
+up1 <- lrm(m3_tb_out ~ group, x=T, y=T, data=contacts_threemonths)
+up1
+up1<-robcov(up1, cluster=contacts_threemonths$id)
+kable(cbind((exp(up1$coefficients)), exp(confint.default(up1))), digits=2)
+```
+
+Now construct a multivariable model. We adjust for trial arm, wealth quintile, and TB type of index case.
+
+Model internal validation is done using 1000 bootstrap replications. Note the over-optimism that this will externally validate by inspecting Somer's Dxy statistic.
+
+```{r}
+#Multivariable model
+mp1 <- lrm(m3_tb_out ~ group + wealth_quintile + tbtype, x=T, y=T, data=contacts_threemonths)
+mp1
+mp1<-robcov(mp1, cluster=contacts_threemonths$id)
+kable(cbind((exp(mp1$coefficients)), exp(confint.default(mp1))), digits = 2)
+
+#validate the model
+validate(mp1, B=1000)
+
+cmp1 <- calibrate(mp1, B=1000)
+
+plot(cmp1)
+
+
+```
 
 <br>
 
-## X. Reproducibility
+## 6. Primary outcome 2: Proportion of Under 5s who initiated IPT.
+
+First univariate model. Note that we adjust confidence intervals for household clustering by using the sandwich estimator.
+
+```{r}
+
+data("under5s_3m", package="PACTSstudy")
+
+under5s_3m %>%
+  tabyl(iptrx, group) %>%
+  adorn_totals("row") %>%
+  adorn_percentages("col") %>%
+  adorn_pct_formatting() %>%
+  adorn_ns() %>%
+  kable()
+
+set.seed(42)
+
+up2 <- lrm(iptrx ~ group, x=T, y=T, data=under5s_3m)
+up2
+up2<-robcov(up2, cluster=under5s_3m$id)
+kable(cbind((exp(up2$coefficients)), exp(confint.default(up2))), digits=2)
+```
+
+Now construct a multivariable model. We adjust for trial arm, wealth quintile, and  TB type of index case.
+
+Model internal validation is done using 1000 bootstrap replications. Note the over-optimism that this will externally validate by inspecting Somer's Dxy statistic.
+
+```{r}
+mp2 <- lrm(iptrx ~ group + wealth_quintile + tbtype, x=T, y=T, data=under5s_3m)
+mp2
+mp2<-robcov(mp2, cluster=under5s_3m$id)
+kable(cbind((exp(mp2$coefficients)), exp(confint.default(mp2))), digits = 2)
+
+#validate the model
+validate(mp2, B=1000)
+
+cmp2 <- calibrate(mp2, B=1000)
+
+plot(cmp2)
+
+
+```
+
+<br>
+
+## 7. Secondary outcome 1: Proportion of Under 5s who completed IPT within 9 months.
+
+First univariate model. Note that we adjust confidence intervals for household clustering by using the sandwich estimator.
+
+```{r}
+data("nine_month", package="PACTSstudy")
+
+nine_month %>%
+  tabyl(ipt9comp2, arm2) %>%
+  adorn_totals("row") %>%
+  adorn_percentages("col") %>%
+  adorn_pct_formatting() %>%
+  adorn_ns() %>%
+  kable()
+
+set.seed(42)
+
+us1 <- lrm(ipt9comp2 ~ arm2, x=T, y=T, data=nine_month)
+us1
+us1<-robcov(us1, cluster=nine_month$id)
+kable(cbind((exp(us1$coefficients)), exp(confint.default(us1))), digits=2)
+
+```
+
+Now construct a multivariable model. We adjust for trial arm, wealth quintile, and TB type of index case.
+
+Model internal validation is done using 1000 bootstrap replications. Note the over-optimism that this will externally validate by inspecting Somer's Dxy statistic.
+
+```{r}
+#Multivariable model
+ms1 <- lrm(ipt9comp2 ~ arm2 + wealth_quintile + smear, x=T, y=T, data=nine_month)
+ms1
+ms1<-robcov(ms1, cluster=nine_month$id)
+kable(cbind((exp(ms1$coefficients)), exp(confint.default(ms1))), digits = 2)
+
+#validate the model
+validate(ms1, B=1000)
+
+cms1 <- calibrate(ms1, B=1000)
+
+plot(cms1)
+
+
+```
+
+<br>
+
+## 8. Secondary outcome 2: Proportion of household contacts with TB symptoms at 3 months.
+
+First univariate model. Note that we adjust confidence intervals for household clustering by using the sandwich estimator.
+
+```{r}
+data("contacts_threemonths", package="PACTSstudy")
+
+contacts_threemonths %>%
+  tabyl(sx_3m, group) %>%
+  adorn_totals("row") %>%
+  adorn_percentages("col") %>%
+  adorn_pct_formatting() %>%
+  adorn_ns() %>%
+  kable()
+
+set.seed(42)
+
+us2 <- lrm(sx_3m ~ group, x=T, y=T, data=contacts_threemonths)
+us2
+us2<-robcov(us2, cluster=contacts_threemonths$id)
+kable(cbind((exp(us2$coefficients)), exp(confint.default(us2))), digits=2)
+```
+
+Now construct a multivariable model. We adjust for trial arm, age (restricted cubic spline with 4 knots), sex, wealth quintile, TB type of index case, and HIV.
+
+Model internal validation is done using 1000 bootstrap replications. Note the over-optimism that this will externally validate by inspecting Somer's Dxy statistic.
+
+```{r}
+#Multivariable model
+ms2 <- lrm(sx_3m ~ group + wealth_quintile + tbtype, x=T, y=T, data=contacts_threemonths)
+ms2
+ms2<-robcov(ms2, cluster=contacts_threemonths$id)
+kable(cbind((exp(ms2$coefficients)), exp(confint.default(ms2))), digits = 2)
+
+#validate the model
+validate(ms2, B=1000)
+
+cms2 <- calibrate(ms2, B=1000)
+
+plot(cms2)
+
+
+```
+
+<br>
+
+## 9. Secondary outcome 3: Proportion of household contacts with micro-confirmed TB at 3 months.
+
+First univariate model. Note that we adjust confidence intervals for household clustering by using the sandwich estimator.
+
+```{r}
+
+data("contacts_threemonths", package="PACTSstudy")
+
+contacts_threemonths %>%
+  tabyl(s3_micro_confirmed, group) %>%
+  adorn_totals("row") %>%
+  adorn_percentages("col") %>%
+  adorn_pct_formatting() %>%
+  adorn_ns() %>%
+  kable()
+
+set.seed(42)
+
+us3 <- lrm(s3_micro_confirmed ~ group, x=T, y=T, data=contacts_threemonths)
+us3
+us3<-robcov(us3, cluster=contacts_threemonths$id)
+kable(cbind((exp(us3$coefficients)), exp(confint.default(us3))), digits=2)
+```
+
+
+Because there are so few events (n=3 in total), I don't think it makes sense to do multivariable analysis). But here we go anyways...
+
+Model internal validation is done using 1000 bootstrap replications. Note the over-optimism that this will externally validate by inspecting Somer's Dxy statistic.
+
+```{r}
+#Multivariable model
+ms3 <- lrm(s3_micro_confirmed ~ group + wealth_quintile + tbtype, x=T, y=T, data=contacts_threemonths)
+ms3
+ms3<-robcov(ms3, cluster=contacts_threemonths$id)
+kable(cbind((exp(ms3$coefficients)), exp(confint.default(ms3))), digits = 2)
+
+#validate the model
+validate(ms3, B=1000)
+
+cms3 <- calibrate(ms3, B=1000)
+
+plot(cms3)
+
+
+```
+
+<br>
+
+## 10. Secondary outcome 4: Proportion of households where at least one household contact was investigated by either "sputum tests", or chest x-ray.
+
+
+```{r}
+
+data("household", package="PACTSstudy")
+
+household <- household %>%
+  mutate(arm2 = case_when(group=="PACTS" ~ "Intervention_PACTS",
+                          group=="SOC" ~ "Control_SOC"))
+
+household %>%
+  tabyl(any_screen3m, arm2) %>%
+  adorn_totals("row") %>%
+  adorn_percentages("col") %>%
+  adorn_pct_formatting() %>%
+  adorn_ns() %>%
+  kable()
+
+set.seed(42)
+
+us4 <- lrm(any_screen3m ~ arm2, x=T, y=T, data=household)
+us4
+kable(cbind((exp(us4$coefficients)), exp(confint.default(us4))), digits=2)
+
+
+ms4 <- lrm(any_screen3m ~ arm2 + wealth_quintile + tbtype, x=T, y=T, data=household)
+ms4
+kable(cbind((exp(ms4$coefficients)), exp(confint.default(ms4))), digits=2)
+
+```
+
+
+
+
+<br>
+
+## 11. Reproducibility
 
 This reproduction of the analysis was run by: 
 
